@@ -53,3 +53,33 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_admin_role(self) -> bool:
         return self.role == self.Role.ADMIN
+
+class Ride(models.Model):
+    class Status(models.TextChoices):
+        EN_ROUTE = "en-route", "En route"
+        PICKUP = "pickup", "Pickup"
+        DROPOFF = "dropoff", "Dropoff"
+
+    id_ride = models.AutoField(primary_key=True)
+    status = models.CharField(max_length=20, choices=Status.choices, db_index=True)
+    id_rider = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="rides_as_rider", db_column="id_rider"
+    )
+    id_driver = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="rides_as_driver", db_column="id_driver"
+    )
+    pickup_latitude = models.FloatField()
+    pickup_longitude = models.FloatField()
+    dropoff_latitude = models.FloatField()
+    dropoff_longitude = models.FloatField()
+    pickup_time = models.DateTimeField(db_index=True)
+
+    class Meta:
+        db_table = "ride"
+        indexes = [
+            models.Index(fields=["pickup_latitude", "pickup_longitude"], name="ride_pickup_geo_idx"),
+            models.Index(fields=["status", "pickup_time"], name="ride_status_time_idx"),
+        ]
+
+    def __str__(self):
+        return f"Ride #{self.id_ride} ({self.status})"
