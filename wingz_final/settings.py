@@ -130,3 +130,15 @@ MAILERS = {
     },
 }
 AUTH_USER_MODEL = "rides.User"
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rides.permissions.IsAdminRole"],
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_PAGINATION_CLASS": "rides.pagination.RidePagination",
+    "PAGE_SIZE": 20,
+}
+
+AUTH_USER_MODEL = "rides.User"
