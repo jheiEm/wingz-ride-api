@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wingz
+      POSTGRES_USER: wingz
+      POSTGRES_PASSWORD: wingz
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wingz"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: wingz
+      POSTGRES_USER: wingz
+      POSTGRES_PASSWORD: wingz
+      POSTGRES_HOST: db
+      DJANGO_DEBUG: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+volumes:
+  pgdata:
