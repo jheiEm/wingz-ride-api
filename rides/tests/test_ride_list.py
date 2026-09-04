@@ -52,3 +52,30 @@ class RideListTests(APITestCase):
     def test_anonymous_is_rejected(self):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(self.url).status_code, 401)
+
+    def test_todays_events_only_contains_last_24_hours(self):
+        response = self.client.get(self.url)
+        for ride in response.data["results"]:
+            descriptions = [e["description"] for e in ride["todays_ride_events"]]
+            self.assertEqual(descriptions, ["recent"])
+
+    def test_nested_rider_and_driver_are_expanded(self):
+        ride = self.client.get(self.url).data["results"][0]
+        self.assertEqual(ride["id_rider"]["email"], "rider@example.com")
+        self.assertEqual(ride["id_driver"]["email"], "driver@example.com")
+
+    def test_filter_by_status_and_rider_email(self):
+        response = self.client.get(self.url, {"status": "pickup"})
+        self.assertTrue(all(r["status"] == "pickup" for r in response.data["results"]))
+        self.assertEqual(
+            self.client.get(self.url, {"rider_email": "nobody@example.com"}).data["count"], 0
+        )
+        self.assertEqual(
+            self.client.get(self.url, {"rider_email": "rider@example.com"}).data["count"], 5
+        )
+
+    def test_sort_by_pickup_time(self):
+        times = [r["pickup_time"] for r in self.client.get(self.url, {"ordering": "pickup_time"}).data["results"]]
+        self.assertEqual(times, sorted(times))
+        times = [r["pickup_time"] for r in self.client.get(self.url, {"ordering": "-pickup_time"}).data["results"]]
+        self.assertEqual(times, sorted(times, reverse=True))
