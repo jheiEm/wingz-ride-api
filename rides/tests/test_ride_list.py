@@ -79,3 +79,61 @@ class RideListTests(APITestCase):
         self.assertEqual(times, sorted(times))
         times = [r["pickup_time"] for r in self.client.get(self.url, {"ordering": "-pickup_time"}).data["results"]]
         self.assertEqual(times, sorted(times, reverse=True))
+
+    def test_list_uses_three_queries(self):
+        """1 ride+joins, 1 prefetch, 1 count. force_authenticate avoids a
+        token lookup query that would otherwise inflate this number."""
+        with self.assertNumQueries(3):
+            response = self.client.get(self.url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.data["results"]), 5)
+
+    def test_query_count_is_constant_as_rides_grow(self):
+        for i in range(20):
+            ride = Ride.objects.create(
+                status=Ride.Status.DROPOFF, id_rider=self.plain, id_driver=self.driver,
+                pickup_latitude=10.0, pickup_longitude=120.0,
+                dropoff_latitude=10.0, dropoff_longitude=120.0,
+                pickup_time=self.now,
+            )
+            RideEvent.objects.create(id_ride=ride, description="recent", created_at=self.now)
+        with self.assertNumQueries(3):
+            self.client.get(self.url, {"page_size": 25})
+    def test_sort_by_distance_is_ascending_from_origin(self):
+        response = self.client.get(
+            self.url, {"ordering": "distance", "pickup_lat": 14.5, "pickup_lng": 120.9}
+        )
+        distances = [r["distance_km"] for r in response.data["results"]]
+        self.assertEqual(distances, sorted(distances))
+        self.assertAlmostEqual(distances[0], 0.0, places=3)
+
+    def test_distance_sort_survives_pagination(self):
+        first = self.client.get(
+            self.url, {"ordering": "distance", "pickup_lat": 14.5, "pickup_lng": 120.9, "page_size": 2}
+        ).data
+        second = self.client.get(
+            self.url,
+            {"ordering": "distance", "pickup_lat": 14.5, "pickup_lng": 120.9, "page_size": 2, "page": 2},
+        ).data
+        self.assertEqual(first["count"], 5)
+        self.assertEqual(len(first["results"]), 2)
+        self.assertLessEqual(first["results"][-1]["distance_km"], second["results"][0]["distance_km"])
+
+    def test_distance_sort_requires_coordinates(self):
+        self.assertEqual(self.client.get(self.url, {"ordering": "distance"}).status_code, 400)
+
+    def test_invalid_ordering_is_rejected(self):
+        self.assertEqual(self.client.get(self.url, {"ordering": "banana"}).status_code, 400)
+
+    def test_invalid_latitude_is_rejected(self):
+        response = self.client.get(
+            self.url, {"ordering": "distance", "pickup_lat": 999, "pickup_lng": 120.9}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_radius_filter_narrows_results(self):
+        response = self.client.get(
+            self.url,
+            {"ordering": "distance", "pickup_lat": 14.5, "pickup_lng": 120.9, "radius_km": 50},
+        )
+        self.assertEqual(response.data["count"], 1)
